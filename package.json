@@ -1,0 +1,26 @@
+{
+  "name": "quickbite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Student tiffin subscription and prep-sheet headcount management platform",
+  "workspaces": [
+    "server",
+    "web",
+    "worker"
+  ],
+  "scripts": {
+    "dev": "npm --workspace=server run dev",
+    "dev:web": "npm --workspace=web run dev",
+    "dev:server": "npm --workspace=server run dev",
+    "build:web": "npm --workspace=web run build",
+    "build:server": "npm --workspace=server run build",
+    "build": "npm --workspace=web run build && npm --workspace=server run build",
+    "typecheck": "npm --workspace=server run typecheck && npm --workspace=web run typecheck && npm --workspace=worker run typecheck",
+    "test": "npm --workspace=server run test && npm --workspace=worker run test",
+    "migrate": "npm --workspace=server run migrate",
+    "start": "npm --workspace=server run start"
+  },
+  "engines": {
+    "node": ">=24.0.0 <25.0.0"
+  }
+}
