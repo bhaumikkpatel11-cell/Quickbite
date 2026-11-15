@@ -13,6 +13,6 @@
     ]
   },
   "vars": {
-    "APP_URL": "http://localhost:3000"
+    "APP_URL": "https://quickbite-2q20.onrender.com"
   }
 }

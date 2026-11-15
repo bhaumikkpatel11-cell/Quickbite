@@ -76,7 +76,7 @@ The root URL `https://quickbite-2q20.onrender.com/` was fetched and parsed for H
   ```
 - **Platform Health Check Compliance**:
   - The Render Web Service health check path is configured strictly to `/livez`.
-  - `/livez` executes zero database queries, preventing Render platform pings from waking Neon serverless compute during idle intervals.
+  - `/livez` responds with HTTP 200 process liveness. (Note: zero database access on `/livez` is established by architectural design and verified in `server/tests/health.test.ts`; the live HTTP probe confirms the process is alive without making readiness claims).
 
 **2. Database Readiness & 30-Second Caching (`GET /readyz`)**:
 - **Probe 1 (Initial / Potential Cache Miss)**:
@@ -126,7 +126,7 @@ The root URL `https://quickbite-2q20.onrender.com/` was fetched and parsed for H
     "error": "Invalid tick credentials"
   }
   ```
-- **Security Check**: Timing-safe comparison via `crypto.timingSafeEqual` rejected the invalid bearer token immediately. No error stack traces or secrets were returned.
+- **Security Check**: The deployed endpoint rejected the invalid bearer token with 401 Unauthorized, returning no stack traces or credentials. (Note: constant-time comparison is established by source code implementation using `crypto.timingSafeEqual` and unit test verification in `server/tests/tick.test.ts`, rather than HTTP response inspection alone).
 
 ---
 
