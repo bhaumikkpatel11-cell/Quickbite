@@ -81,6 +81,13 @@ Last updated: 15 Nov 2026. Read `PROJECT.md`, `BUSINESS_RULES.md` (v2.1), `ARCHI
   - **Render Deployment Guide**: Authored `docs/DEPLOY_RENDER.md` covering service type (Web Service), runtime (Node), root directory (`.`), build command (`npm ci --include=dev && npm run build`), start command (`npm start`), instance (Free), health check strictly `/livez`, environment variables (`NODE_ENV=production`, `DATABASE_URL`, `TICK_SECRET`), explicitly omitting `TEST_DATABASE_URL` and forbidding client-side secrets.
   - **Git Hygiene & Ignore Verification**: Verified `.gitignore` ignores `.env` via `git check-ignore -v .env` and verified `.env` is untracked via `git ls-files -- .env`. Staged all 61 reviewed project files, excluding build artifacts, dependencies, review packages, and secrets.
   - **Local Commit**: Created initial local Git commit on `master` containing all 61 reviewed project files.
+- **Render Production Deployment Verification (Completed - see `docs/evidence/M1B_RENDER.md`)**:
+  - Live deployment verified at `https://quickbite-2q20.onrender.com`.
+  - **SPA & Assets**: Verified `GET /` serves compiled React SPA (200 OK, 654 bytes) and both Vite assets (`/assets/index-X299OTM8.js` and `/assets/index-Dj4Y14mn.css`) load cleanly with 200 OK.
+  - **Liveness**: Verified `GET /livez` responds with 200 OK (`{"status":"ok"}`) with zero DB access; confirmed Render platform health check is configured strictly to `/livez`.
+  - **Database Readiness & Cache**: Verified `GET /readyz` responds with 200 OK (`{"status":"ready"}`). Probe 1 executed a real Neon DB check (`cached: false`), and probe 2 verified 30s in-memory caching (`cached: true`).
+  - **Authentication Guardrails**: Verified `POST /internal/tick` rejects unauthenticated requests (401) and invalid bearer tokens (401) using timing-safe comparison.
+  - **Receipt Recording & Idempotency**: Privately authenticated test tick with valid `TICK_SECRET` using test timestamp `2026-11-15T14:15:00.000Z` and job `'cutoff'`. Initial delivery recorded receipt (`receipt_id: 3`, `duplicate: false`); repeated delivery safely returned `duplicate: true` with identical `receipt_id: 3`. Explicitly documented that this manual HTTP verification does not claim or prove cron execution.
 
 ## 3. Verified results
 
@@ -99,6 +106,14 @@ Last updated: 15 Nov 2026. Read `PROJECT.md`, `BUSINESS_RULES.md` (v2.1), `ARCHI
   - `npm run build`: both `web` (Vite) and `server` (tsc) compile cleanly to `dist/`.
 - **Platform PORT Binding & SPA Serving Verification**:
   - Verified local server bound to platform `PORT=3847`. `GET /` returned HTTP 200 serving compiled React SPA `index.html` (654 bytes, containing `<div id="root">`); `GET /livez` returned HTTP 200 `{ status: 'ok' }`.
+- **Render Production Deployment Verification**:
+  - Deployment URL: `https://quickbite-2q20.onrender.com`.
+  - `GET /`: 200 OK (654 bytes HTML with `<div id="root"></div>` and Demo Mode banner).
+  - Static Assets: `/assets/index-X299OTM8.js` (146,761 bytes, 200 OK), `/assets/index-Dj4Y14mn.css` (2,227 bytes, 200 OK).
+  - `GET /livez`: 200 OK (`{"status":"ok"}`).
+  - `GET /readyz`: 200 OK (`{"status":"ready"}`), probe 1 `cached: false`, probe 2 `cached: true` (30s TTL cache confirmed).
+  - `POST /internal/tick`: 401 Unauthorized without auth; 401 Unauthorized with invalid token.
+  - `POST /internal/tick`: 200 OK on valid token (`receipt_id: 3`, `duplicate: false` on first call; identical `receipt_id: 3`, `duplicate: true` on second call).
 - **Node 24 Pinning**:
   - `package.json`: `"engines": { "node": ">=24.0.0 <25.0.0" }`.
   - `.node-version`: `24`.
@@ -115,9 +130,9 @@ Last updated: 15 Nov 2026. Read `PROJECT.md`, `BUSINESS_RULES.md` (v2.1), `ARCHI
 
 | Dependency | What is unknown | Resolved by |
 |---|---|---|
-| Render account and free deployment | Whether signup needs a card. Real cold-start behaviour. Health-check behaviour on the free plan | M1B (hosting phase) |
-| Cloudflare account and Worker cron | Whether a card is required. Actual jitter. Cron-to-app behaviour against a sleeping service over several days | M1B (hosting phase) |
-| Neon compute scale-to-zero observation | Empirically measuring compute suspension during idle intervals between ticks over multiple days | M1B (hosting phase) |
+| Render account and free deployment | Resolved: Web service deployed on free tier, `/livez` health check operational, zero card charge confirmed | M1B (Render phase - Done) |
+| Cloudflare account and Worker cron | Whether a card is required. Actual jitter. Cron-to-app behaviour against a sleeping service over several days | M1B (Cloudflare phase) |
+| Neon compute scale-to-zero observation | Empirically measuring compute suspension during idle intervals between ticks over multiple days | M1B (scheduler observation phase) |
 | Brevo real recipient delivery | Whether single-sender sending works for arbitrary recipients, spam placement, deliverability from the sender address | M2 |
 | Antigravity skills folder | Resolved: `.agents/skills/` is scanned and loaded | M0 (Done) |
 | GitHub CI | Whether free CI is available for the chosen repository settings | M0 |
@@ -132,20 +147,19 @@ Last updated: 15 Nov 2026. Read `PROJECT.md`, `BUSINESS_RULES.md` (v2.1), `ARCHI
 
 ## 6. Next task
 
-Milestone M1B database verification and Render deployment preparation are complete and committed locally on `master`.
-Next: proceed with **Remote GitHub Repository Connection & M1B Cloud Hosting**:
-1. Connect remote GitHub repository: obtain the repository URL from user (no remote is configured yet), add `origin`, and push `master`.
-2. Deploy Express service to Render free web service following `docs/DEPLOY_RENDER.md`:
-   - Service: Web Service
-   - Runtime: Node
-   - Build command: `npm ci --include=dev && npm run build`
-   - Start command: `npm start`
-   - Instance: Free
-   - Health check: `/livez` strictly
-   - Environment variables: `NODE_ENV=production`, `DATABASE_URL`, `TICK_SECRET` (do not configure `TEST_DATABASE_URL`; no frontend secrets).
-3. Deploy Cloudflare Worker with Wrangler configuring the 5 cron triggers and the `TICK_SECRET` secret.
-4. Accumulate at least 3 consecutive days of scheduled ticks in `docs/evidence/` and observe Neon compute suspension during idle periods.
-Do not begin M3 until M1B has verified a working deployed `/livez`, authenticated ticks on Render, and multi-day scheduler logs.
+Render production deployment verification is complete and verified with sanitized live evidence in `docs/evidence/M1B_RENDER.md`.
+Next: proceed with **Cloudflare Worker Deployment & 3-Day Scheduler Evidence**:
+1. Deploy `quickbite-scheduler` Cloudflare Worker via Wrangler configuring the 5 cron triggers:
+   - `30 16 * * *` (22:00 IST): `reminder`
+   - `30 17 * * *` (23:00 IST): `cutoff`
+   - `40 17 * * *` (23:10 IST): `cutoff_retry`
+   - `30 3 * * *` (09:00 IST): `recovery`
+   - `20 4 * * *` (09:50 IST): `recovery_retry`
+2. Configure Worker environment variables and secrets via Wrangler:
+   - `APP_URL`: `https://quickbite-2q20.onrender.com`
+   - `TICK_SECRET`: Secret bearer token shared with Render.
+3. Accumulate at least 3 consecutive days of automated cron execution logs in `docs/evidence/` and observe Neon compute suspension during idle intervals.
+Do not begin M3 until M1B has verified automated cron execution on Render and multi-day scheduler logs.
 
 ## 7. How to resume in a new conversation
 
