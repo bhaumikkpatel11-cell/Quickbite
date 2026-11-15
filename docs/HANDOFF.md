@@ -88,13 +88,13 @@ Last updated: 15 Nov 2026. Read `PROJECT.md`, `BUSINESS_RULES.md` (v2.1), `ARCHI
   - **Database Readiness & Cache**: Verified `GET /readyz` responds with 200 OK (`{"status":"ready"}`). Probe 1 executed a real Neon DB check (`cached: false`), and probe 2 verified 30s in-memory caching (`cached: true`).
   - **Authentication Guardrails**: Verified `POST /internal/tick` rejects unauthenticated requests (401) and invalid bearer tokens (401). (Note: constant-time comparison is established by unit test verification of `crypto.timingSafeEqual` in `server/tests/tick.test.ts`, rather than HTTP response inspection alone).
   - **Receipt Recording & Idempotency**: Privately authenticated test tick with valid `TICK_SECRET` using test timestamp `2026-11-15T14:15:00.000Z` and job `'cutoff'`. Initial delivery recorded receipt (`receipt_id: 3`, `duplicate: false`); repeated delivery safely returned `duplicate: true` with identical `receipt_id: 3`. Explicitly documented that this manual HTTP verification does not claim or prove cron execution.
-- **Cloudflare Scheduler Preparation & Dry-Run (Completed - see `docs/evidence/M1B_CLOUDFLARE.md` & `docs/evidence/M1B_SCHEDULER_OBSERVATION.md`)**:
-  - **Wrangler Tooling**: Installed project-local `wrangler@4.162.0` as worker dev dependency and updated `package-lock.json`.
-  - **Target Configuration**: Updated `APP_URL` in `worker/wrangler.jsonc` to `https://quickbite-2q20.onrender.com`.
-  - **Cron Schedule Preservation**: Preserved all 5 authoritative UTC cron schedules (`reminder`, `cutoff`, `cutoff_retry`, `recovery`, `recovery_retry`) and their job mappings in `worker/src/index.ts`. Public `/trigger` remains disabled.
-  - **Free Tier Compatibility**: Assessed Cloudflare Workers Free tier limits: 5 cron triggers per account supported, 100,000 req/day quota, 10 ms CPU allowance per trigger (QuickBite uses ~1 ms CPU).
-  - **Dry-Run & Verification**: Passed TypeScript typechecks and 28 worker unit tests. Successfully executed `npx wrangler deploy --dry-run` verifying script bundle size (10.01 KiB / 2.62 KiB gzip) and variable binding.
-  - **Observation Log & Procedure**: Authored `docs/evidence/M1B_SCHEDULER_OBSERVATION.md` establishing the 3-day observation protocol, distinguishing manual baseline entries from automated cron events, precluding false cold-start attribution without platform instrumentation, and specifying Neon compute scale-to-zero observation procedures. Real cron entries marked pending.
+- **Cloudflare Scheduler Deployment & Verification (Completed - see `docs/evidence/M1B_CLOUDFLARE.md` & `docs/evidence/M1B_SCHEDULER_OBSERVATION.md`)**:
+  - **Tooling & Configuration**: Installed project-local `wrangler@4.162.0` in `worker/package.json`. Configured `APP_URL=https://quickbite-2q20.onrender.com` in `worker/wrangler.jsonc`.
+  - **Cron Schedule Preservation**: Preserved all 5 authoritative UTC cron schedules (`reminder`, `cutoff`, `cutoff_retry`, `recovery`, `recovery_retry`) and their job mappings in `worker/src/index.ts`.
+  - **Production Deployment**: Deployed `quickbite-scheduler` to Cloudflare Workers Free plan. Active Version ID: `dc1e806c-9c6b-41fe-b67c-031965e80550` (deployed 15 Nov 2026, 20:23:38 IST). Live URL: `https://quickbite-scheduler.bhaumik-quickbite.workers.dev`.
+  - **Configuration & Secret Verification**: Verified via `wrangler versions view` and `wrangler secret list` that `TICK_SECRET` is bound as `secret_text` (zero secret values logged or committed) and `APP_URL` is bound as environment variable.
+  - **Endpoint Guardrails**: Verified `GET /` returns 200 OK (`{"service":"quickbite-scheduler-worker","status":"healthy",...}`); verified public `/trigger` returns 404 Not Found on both GET and POST.
+  - **Observation Protocol**: Authored `docs/evidence/M1B_SCHEDULER_OBSERVATION.md` establishing the 3-day observation protocol, distinguishing manual baseline entries from automated cron events, precluding false cold-start attribution without platform instrumentation, and specifying Neon compute scale-to-zero observation procedures. Real cron entries marked pending. Successful deployment is explicitly not treated as proof of scheduled delivery.
 
 ## 3. Verified results
 
@@ -121,11 +121,14 @@ Last updated: 15 Nov 2026. Read `PROJECT.md`, `BUSINESS_RULES.md` (v2.1), `ARCHI
   - `GET /readyz`: 200 OK (`{"status":"ready"}`), probe 1 `cached: false`, probe 2 `cached: true` (30s TTL cache confirmed).
   - `POST /internal/tick`: 401 Unauthorized without auth; 401 Unauthorized with invalid token.
   - `POST /internal/tick`: 200 OK on valid token (`receipt_id: 3`, `duplicate: false` on first call; identical `receipt_id: 3`, `duplicate: true` on second call).
-- **Cloudflare Scheduler Build & Dry Run Verification**:
-  - `npm --workspace=worker run typecheck`: 0 errors.
-  - `npm --workspace=worker run test`: 28 passed, 0 failed, 0 skipped.
-  - `npx wrangler deploy --dry-run`: Succeeded (upload: 10.01 KiB, gzip: 2.62 KiB, binding `APP_URL`).
-  - Free Tier limits analysis: 5 cron triggers per account supported, 100,000 req/day quota, 10 ms CPU allowance per trigger.
+- **Cloudflare Scheduler Deployment & Verification**:
+  - Worker URL: `https://quickbite-scheduler.bhaumik-quickbite.workers.dev`.
+  - Deployment Version: `dc1e806c-9c6b-41fe-b67c-031965e80550`.
+  - Handlers active: `scheduled`, `fetch`.
+  - Verified bindings: `TICK_SECRET` (secret_text, value never displayed), `env.APP_URL` (`https://quickbite-2q20.onrender.com`).
+  - `GET /`: 200 OK (`{"service":"quickbite-scheduler-worker","status":"healthy","registered_crons":[...]}`).
+  - `POST /trigger` and `GET /trigger`: 404 Not Found (`{"error":"Not Found"}`).
+  - All 5 cron triggers registered on Cloudflare Workers Free plan: `30 16 * * *` (22:00 IST), `30 17 * * *` (23:00 IST), `40 17 * * *` (23:10 IST), `30 3 * * *` (09:00 IST), `20 4 * * *` (09:50 IST).
 - **Node 24 Pinning**:
   - `package.json`: `"engines": { "node": ">=24.0.0 <25.0.0" }`.
   - `.node-version`: `24`.
@@ -143,8 +146,8 @@ Last updated: 15 Nov 2026. Read `PROJECT.md`, `BUSINESS_RULES.md` (v2.1), `ARCHI
 | Dependency | What is unknown | Resolved by |
 |---|---|---|
 | Render account and free deployment | Resolved: Web service deployed on free tier, `/livez` health check operational, zero card charge confirmed | M1B (Render phase - Done) |
-| Cloudflare account and Worker cron | Whether a card is required. Actual jitter. Cron-to-app behaviour against a sleeping service over several days | M1B (Cloudflare phase) |
-| Neon compute scale-to-zero observation | Empirically measuring compute suspension during idle intervals between ticks over multiple days | M1B (scheduler observation phase) |
+| Cloudflare account and Worker cron | Resolved: Worker deployed on free tier, 5 cron triggers registered, zero card charge confirmed | M1B (Cloudflare phase - Done) |
+| Neon compute scale-to-zero observation | Empirically measuring compute suspension during idle intervals between ticks over multiple days | M1B (scheduler observation phase - In Progress) |
 | Brevo real recipient delivery | Whether single-sender sending works for arbitrary recipients, spam placement, deliverability from the sender address | M2 |
 | Antigravity skills folder | Resolved: `.agents/skills/` is scanned and loaded | M0 (Done) |
 | GitHub CI | Whether free CI is available for the chosen repository settings | M0 |
@@ -159,16 +162,17 @@ Last updated: 15 Nov 2026. Read `PROJECT.md`, `BUSINESS_RULES.md` (v2.1), `ARCHI
 
 ## 6. Next task
 
-Render production deployment verification is complete and Cloudflare scheduler worker is prepared, tested, and dry-run verified.
-Next: proceed with **Cloudflare Worker Authentication, Deployment & 3-Day Scheduler Evidence**:
-1. Complete Cloudflare authentication via `wrangler login` (or API token) in user terminal.
-2. Bind `TICK_SECRET` secret to the Worker (`npx wrangler secret put TICK_SECRET --config worker/wrangler.jsonc`) securely without logging or committing secrets.
-3. Deploy `quickbite-scheduler` to Cloudflare Workers Free plan via `npx wrangler deploy --config worker/wrangler.jsonc`. Confirm all 5 cron triggers (`reminder`, `cutoff`, `cutoff_retry`, `recovery`, `recovery_retry`) and bindings are active.
-4. Execute the multi-day observation procedure in `docs/evidence/M1B_SCHEDULER_OBSERVATION.md`:
-   - Collect 3 consecutive days of automated cron execution entries in `scheduler_runs`.
-   - Observe Neon compute scale-to-zero suspension during idle intervals (e.g. between 23:10 IST and 09:00 IST).
-   - Ensure latency is never labeled as cold-start duration unless platform logs provide that attribution.
-Do not begin M3 until M1B has verified automated cron execution on Render and multi-day scheduler logs.
+Render production deployment and Cloudflare Worker scheduler deployment are verified live with all 5 cron triggers active.
+Next: proceed with **3-Day Multi-Day Scheduler Evidence & Neon Scale-to-Zero Observation**:
+1. Collect the first scheduled-run evidence tonight at **22:00 IST (16:30 UTC)** on **15 Nov 2026** for the `reminder` cron trigger:
+   - Stream Cloudflare invocation logs via `npx wrangler tail --config worker/wrangler.jsonc`.
+   - Query `scheduler_runs` on Neon directly to verify the receipt record (`job_name = 'reminder'`, `status = 'recorded'`, `trigger_source = 'cron'`).
+   - Populate Day 1 row in `docs/evidence/M1B_SCHEDULER_OBSERVATION.md`.
+2. Observe scheduled executions for Day 1 `cutoff` (23:00 IST) and `cutoff_retry` (23:10 IST).
+3. Check Neon Console compute metrics during the ~9h 50m idle interval between 23:10 IST and 09:00 IST to confirm scale-to-zero compute suspension.
+4. Observe morning `recovery` (09:00 IST) and `recovery_retry` (09:50 IST) on 16 Nov 2026.
+5. Continue through Day 2 and Day 3.
+Do not declare Milestone M1 complete until 3 consecutive days of automated cron evidence are logged.
 
 ## 7. How to resume in a new conversation
 

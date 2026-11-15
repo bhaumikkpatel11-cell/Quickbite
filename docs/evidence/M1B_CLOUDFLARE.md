@@ -114,7 +114,36 @@ In accordance with project security directives:
 - [x] All 28 worker tests and typechecks passing.
 - [x] Wrangler deployment dry-run verified.
 - [x] Free tier limits confirmed (5 cron triggers per account supported).
-- [ ] Cloudflare account authentication (`wrangler login` / API token).
-- [ ] `TICK_SECRET` encrypted secret bound on Cloudflare.
-- [ ] Production deployment executed via `npx wrangler deploy --config worker/wrangler.jsonc`.
+- [x] Cloudflare account authenticated.
+- [x] `TICK_SECRET` encrypted secret bound on Cloudflare.
+- [x] Production deployment executed via `npx wrangler deploy --config worker/wrangler.jsonc`.
+- [x] Deployed configuration and `TICK_SECRET` binding verified via Wrangler CLI without displaying secret values.
+- [x] Public `/trigger` endpoint verified returning HTTP 404.
 - [ ] Live cron trigger execution observed in `docs/evidence/M1B_SCHEDULER_OBSERVATION.md`.
+
+---
+
+## 6. Live Deployment Verification (Tasks 1 & 2)
+
+**Worker URL**: `https://quickbite-scheduler.bhaumik-quickbite.workers.dev`  
+**Active Deployment Version**: `dc1e806c-9c6b-41fe-b67c-031965e80550`  
+**Deployed At**: `2026-11-15T14:53:38.776Z` (20:23:38 IST)  
+**Handlers Active**: `scheduled`, `fetch`
+
+### A. Secret & Variable Bindings Verification
+Inspected via `npx wrangler versions view dc1e806c-9c6b-41fe-b67c-031965e80550 --config worker/wrangler.jsonc` and `npx wrangler secret list`:
+- **Secret Binding**: `TICK_SECRET` (Type: `secret_text`, value strictly redacted / never logged).
+- **Environment Variable Binding**: `env.APP_URL` = `https://quickbite-2q20.onrender.com`.
+
+### B. Live HTTP Probing Results
+
+| Endpoint / Method | Expected Result | Actual Live Result | Status |
+| :--- | :--- | :--- | :---: |
+| `GET /` | 200 OK, service healthy JSON, 5 registered crons | `200 OK` (`{"service":"quickbite-scheduler-worker","status":"healthy","registered_crons":["30 16 * * *","30 17 * * *","40 17 * * *","30 3 * * *","20 4 * * *"]}`) | **PASSED** |
+| `POST /trigger` | 404 Not Found (disabled public trigger) | `404 Not Found` (`{"error":"Not Found"}`) | **PASSED** |
+| `GET /trigger` | 404 Not Found | `404 Not Found` (`{"error":"Not Found"}`) | **PASSED** |
+
+> [!IMPORTANT]
+> **Observation Reminder**:
+> Successful deployment and registration of cron triggers does **not** prove successful scheduled delivery.
+> Automated scheduled-run verification remains pending live execution over 3 consecutive calendar days in [`docs/evidence/M1B_SCHEDULER_OBSERVATION.md`](file:///e:/project/QuickBite/docs/evidence/M1B_SCHEDULER_OBSERVATION.md).
